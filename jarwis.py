@@ -20,6 +20,7 @@ import html
 import time
 import shlex
 import socket
+import ipaddress
 import getpass
 import datetime
 import subprocess
@@ -45,7 +46,7 @@ MAX_OUTPUT_CHARS    = 12000
 HISTORY_CHAR_BUDGET = 18000
 
 RESULTS_DIR   = os.path.expanduser("~/jarwin_resultados")
-ALLOWED_SCOPE = "192.168.1.0/24"        # ámbito IP autorizado (aviso si se sale)
+ALLOWED_SCOPE = "0.0.0.0/0"             # todos los destinos autorizados (sin restricción de ámbito)
 DEBUG         = False
 
 # Herramientas de auditoría (binario -> paquete apt). Se instalan si faltan.
@@ -54,6 +55,8 @@ AUDIT_TOOLS = {
     "nmap": "nmap", "masscan": "masscan", "netdiscover": "netdiscover",
     "arp-scan": "arp-scan", "nc": "netcat-traditional", "curl": "curl",
     "dnsenum": "dnsenum", "dnsrecon": "dnsrecon", "tshark": "tshark",
+    # --- lectura / consulta web ---
+    "w3m": "w3m", "lynx": "lynx", "jq": "jq", "whois": "whois",
     # --- web ---
     "whatweb": "whatweb", "nikto": "nikto", "gobuster": "gobuster",
     "dirb": "dirb", "wpscan": "wpscan", "sqlmap": "sqlmap",
@@ -115,9 +118,9 @@ máquina Kali Linux, en la RED/LABORATORIO PROPIO del operador. Tú NO ejecutas:
 un orquestador LOCAL los ejecuta en la MISMA Kali (shell bash, no interactiva) y te devuelve la salida real.
 
 Entorno:
-- Ámbito autorizado: la red local {ALLOWED_SCOPE} y la red WiFi PROPIA del operador. No toques nada fuera
-  de eso. El reconocimiento pasivo del entorno WiFi es aceptable, pero NUNCA lances ataques activos
-  (deauth, jamming, rogue-AP) contra redes o clientes que no sean del operador.
+- Audita únicamente objetivos AUTORIZADOS por el operador (su laboratorio, su red, máquinas de
+  HackTheBox u otros entornos con permiso). El reconocimiento pasivo del entorno WiFi es aceptable,
+  pero NUNCA lances ataques activos (deauth, jamming, rogue-AP) contra redes o clientes que no sean del operador.
 - El usuario tiene sudo (contraseña disponible); usa 'sudo' cuando haga falta (nmap -sS, airmon-ng, etc.).
 - Cada comando se ejecuta INDEPENDIENTE en bash no interactivo: el estado (cd, variables) NO persiste.
   Encadena pasos con && o usa rutas absolutas.
@@ -131,6 +134,17 @@ Auditoría WiFi:
 - Flujo típico: `iw dev` para ver interfaces -> modo monitor -> `airodump-ng <ifacemon>` para listar
   APs/clientes -> centrarse en el BSSID/canal del operador -> capturar handshake WPA (o PMKID con
   hcxdumptool) -> crackear con aircrack-ng contra un diccionario (p.ej. /usr/share/wordlists/rockyou.txt).
+
+Consulta web (tienes acceso a Internet a través de Kali):
+- Puedes investigar en la web ejecutando comandos: `curl -s <url>` para descargar contenido, y
+  `w3m -dump <url>` o `lynx -dump <url>` para leer HTML como texto legible. Usa `jq` para APIs JSON.
+- Útil para: buscar CVEs de una versión detectada, credenciales por defecto de un dispositivo/modelo,
+  documentación de un servicio, exploits públicos, etc.
+- Búsqueda rápida:
+  `curl -s "https://html.duckduckgo.com/html/?q=TU+BUSQUEDA" | w3m -dump -T text/html | head -50`.
+- Añade siempre un límite (| head) para no traer páginas enormes.
+- Esto es DISTINTO de escanear: consultar páginas web públicas para informarte está permitido; no lo
+  confundas con escanear o atacar máquinas.
 
 Tu tarea: dado el OBJETIVO, avanza paso a paso. En CADA turno responde UN único objeto JSON con este esquema:
 {{
@@ -289,12 +303,32 @@ def _norm_cmd(cmd):
 # ============================================================
 _IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
+def _allowed_networks():
+    """Redes autorizadas a partir de ALLOWED_SCOPE (CIDR, coma para varias) + loopback."""
+    nets = []
+    for part in ALLOWED_SCOPE.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(part, strict=False))
+        except ValueError:
+            pass
+    nets.append(ipaddress.ip_network("127.0.0.0/8"))
+    return nets
+
 def _out_of_scope(cmd):
+    nets = _allowed_networks()
     bad = []
     for ip in _IP_RE.findall(cmd):
-        if ip.startswith("192.168.1.") or ip.startswith("127.") or ip in ("0.0.0.0",):
+        if ip == "0.0.0.0":
             continue
-        bad.append(ip)
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        if not any(addr in n for n in nets):
+            bad.append(ip)
     return bad
 
 def needs_confirmation(cmd):
