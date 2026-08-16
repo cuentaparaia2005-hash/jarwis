@@ -24,18 +24,28 @@ hasta cumplir el objetivo. Genera un **informe HTML** al terminar.
 **Opción A — descarga directa (un comando):**
 
 ```bash
-sudo curl -fsSL https://raw.githubusercontent.com/USUARIO/REPO/main/jarwis.py -o /usr/local/bin/jarwis && sudo chmod +x /usr/local/bin/jarwis
+sudo curl -fsSL https://raw.githubusercontent.com/cuentaparaia2005-hash/jarwis/main/jarwis.py -o /usr/local/bin/jarwis && sudo chmod +x /usr/local/bin/jarwis
 ```
 
 **Opción B — clonando el repo:**
 
 ```bash
-git clone https://github.com/USUARIO/REPO.git
-cd REPO
-bash install.sh
+git clone https://github.com/cuentaparaia2005-hash/jarwis.git && cd jarwis && bash install.sh
 ```
 
-Ambas dejan el comando `jarwis` disponible en el sistema.
+Ambas dejan el comando `jarwis` disponible en el sistema. Después, simplemente:
+
+```bash
+jarwis
+```
+
+> **¿`curl` devuelve 404?** Copia el comando tal cual (no lo teclees): el usuario lleva el sufijo
+> `-hash` y las URLs de `raw.githubusercontent.com` son sensibles a mayúsculas. Comprueba primero
+> que la URL responde `200`:
+>
+> ```bash
+> curl -sI https://raw.githubusercontent.com/cuentaparaia2005-hash/jarwis/main/jarwis.py | head -1
+> ```
 
 ## Uso
 
@@ -50,8 +60,16 @@ jarwis "escanea 192.168.1.66 y dime servicios y versiones"
 ```
 
 Al arrancar pregunta el **usuario**, la **IP de LM Studio** y deja **elegir el modelo** cargado;
-la contraseña de sudo se pide en cada ejecución (no se guarda). Los informes se guardan en
-`~/Desktop/Jarwis/` en formato HTML.
+la contraseña de sudo se pide en cada ejecución (no se guarda). Audita cualquier objetivo (solo
+pide confirmación en comandos destructivos o ataques WiFi activos) y puede **consultar la web**
+durante la auditoría (`curl`, `w3m`, `jq`). Los informes se guardan en `~/Desktop/Jarwis/` en HTML.
+
+## Uso con HackTheBox
+
+1. Conecta la VPN de HTB dentro de Kali: `sudo openvpn tu_pack.ovpn` (espera *Initialization
+   Sequence Completed*; crea `tun0`).
+2. En VirtualBox usa el adaptador en modo **Bridged** (internet para la VPN + acceso a tu LM Studio).
+3. Lanza el objetivo: `jarwis "audita el host 10.129.X.X: puertos, servicios y via de entrada"`.
 
 ## Auditoría WiFi
 
